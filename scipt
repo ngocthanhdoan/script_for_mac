@@ -4,72 +4,47 @@ set sourceFolder to choose folder with prompt "Chọn thư mục DISC chứa ả
 -- Chọn thư mục đích để lưu các tệp đã chọn
 set destinationFolder to choose folder with prompt "Chọn thư mục đích để lưu các tệp đã chọn"
 
--- Lấy tất cả các tệp trong thư mục DISC
-tell application "Finder"
-    set sourceFiles to files of sourceFolder
-end tell
+-- Chuyển đổi đường dẫn từ AppleScript format sang POSIX format
+set sourceFolderPosix to POSIX path of sourceFolder
+set destinationFolderPosix to POSIX path of destinationFolder
 
--- Bắt đầu xử lý sao chép tệp RAW và JPEG từ DISC sang thư mục đích
-repeat with sourceFile in sourceFiles
-    set fileName to name of sourceFile
-    set baseName to do shell script "basename " & quoted form of fileName -- Lấy tên file không có đuôi
-
-    -- Kiểm tra và sao chép tệp RAW hoặc JPEG vào thư mục đích
-    set rawFile to sourceFolder & ":" & baseName & ".CR2" as string  -- Tệp RAW (ví dụ: .CR2)
-    set jpegFile to sourceFolder & ":" & baseName & ".JPEG" as string  -- Tệp JPEG (ví dụ: .JPEG)
-
-    -- Sao chép tệp RAW hoặc JPEG vào thư mục đích nếu đã chọn
-    set rawFileQuoted to quoted form of rawFile
-    set jpegFileQuoted to quoted form of jpegFile
-
-    -- Kiểm tra xem tệp RAW có tồn tại không
-    if (do shell script "test -e " & rawFileQuoted & " && echo exists") is "exists" then
-        tell application "Finder"
-            duplicate file rawFile to destinationFolder
-        end tell
-        display dialog "Đã sao chép tệp RAW: " & baseName
-    end if
-
-    -- Kiểm tra xem tệp JPEG có tồn tại không
-    if (do shell script "test -e " & jpegFileQuoted & " && echo exists") is "exists" then
-        tell application "Finder"
-            duplicate file jpegFile to destinationFolder
-        end tell
-        display dialog "Đã sao chép tệp JPEG: " & baseName
-    end if
-end repeat
-
--- Bước 5: Tìm các tệp thiếu trong thư mục DISC dựa trên tên tệp
+-- Lấy tất cả các tệp trong thư mục đích
 tell application "Finder"
     set destFiles to files of destinationFolder
 end tell
 
+-- Bắt đầu xử lý sao chép các tệp có cùng tên nhưng khác định dạng từ DISC sang thư mục đích
 repeat with destFile in destFiles
     set destFileName to name of destFile
-    set baseNameDest to do shell script "basename " & quoted form of destFileName  -- Lấy tên file không có đuôi
+    set baseName to do shell script "basename " & quoted form of destFileName & " | cut -d. -f1" -- Lấy tên file không có đuôi
 
-    -- Kiểm tra xem các định dạng tệp khác có thiếu trong thư mục đích không
-    set fileExtensions to {".CR2", ".NEF", ".ARW", ".DNG", ".TIFF", ".JPEG", ".PNG"}  -- Danh sách các định dạng file cần kiểm tra
+    -- Lấy danh sách tất cả các tệp có cùng tên nhưng khác định dạng trong thư mục gốc
+    set sourceFiles to do shell script "find " & quoted form of sourceFolderPosix & " -type f -name " & quoted form of (baseName & ".*")
 
-    -- Duyệt qua tất cả các định dạng file cần kiểm tra
-    repeat with ext in fileExtensions
-        -- Tạo tên file cho mỗi định dạng
-        set fileInDest to destinationFolder & ":" & baseNameDest & ext as string
-        set fileInDestQuoted to quoted form of fileInDest
+    -- Chia danh sách tệp thành các dòng riêng biệt
+    set sourceFilesList to paragraphs of sourceFiles
 
-        -- Kiểm tra xem tệp có thiếu trong thư mục đích không
-        if (do shell script "test -e " & fileInDestQuoted & " && echo exists") is not "exists" then
-            -- Nếu thiếu, sao chép tệp từ thư mục DISC vào thư mục đích
-            set fileInSource to sourceFolder & ":" & baseNameDest & ext as string
-            set fileInSourceQuoted to quoted form of fileInSource
-            if (do shell script "test -e " & fileInSourceQuoted & " && echo exists") is "exists" then
-                tell application "Finder"
-                    duplicate file fileInSource to destinationFolder
-                end tell
-                display dialog "Đã sao chép tệp " & ext & " thiếu: " & baseNameDest
+    -- Duyệt qua tất cả các tệp trong danh sách
+    repeat with sourceFile in sourceFilesList
+        set fileInSource to sourceFile
+        set fileInDest to destinationFolderPosix & baseName & "." & (do shell script "basename " & quoted form of sourceFile & " | cut -d. -f2")
+
+        -- Kiểm tra xem tệp có tồn tại trong thư mục đích không
+        if (do shell script "test -e " & quoted form of fileInDest & " && echo exists") is not "exists" then
+            -- Nếu tệp không tồn tại trong thư mục đích, sao chép tệp từ thư mục DISC vào thư mục đích
+            if (do shell script "test -e " & quoted form of fileInSource & " && echo exists") is "exists" then
+                try
+                    -- Sao chép tệp vào thư mục đích
+                    do shell script "cp " & quoted form of fileInSource & " " & quoted form of destinationFolderPosix
+                    display dialog "Đã sao chép tệp: " & baseName & "." & (do shell script "basename " & quoted form of sourceFile & " | cut -d. -f2") buttons {"OK"} default button "OK"
+                on error errMsg
+                    display dialog "Không thể sao chép tệp: " & baseName & "." & (do shell script "basename " & quoted form of sourceFile & " | cut -d. -f2") & ". Lỗi: " & errMsg buttons {"OK"} default button "OK"
+                end try
+            else
+                display dialog "Tệp không tồn tại trong thư mục gốc: " & baseName & "." & (do shell script "basename " & quoted form of sourceFile & " | cut -d. -f2") buttons {"OK"} default button "OK"
             end if
         end if
     end repeat
 end repeat
 
-display dialog "Hoàn tất sao chép các tệp thiếu!"
+display dialog "Hoàn tất sao chép các tệp thiếu!" buttons {"OK"} default button "OK"
