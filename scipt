@@ -19,14 +19,19 @@ repeat with sourceFile in sourceFiles
     set jpegFile to sourceFolder & ":" & baseName & ".JPEG" as string  -- Tệp JPEG (ví dụ: .JPEG)
 
     -- Sao chép tệp RAW hoặc JPEG vào thư mục đích nếu đã chọn
-    if exists file rawFile then
+    set rawFileQuoted to quoted form of rawFile
+    set jpegFileQuoted to quoted form of jpegFile
+
+    -- Kiểm tra xem tệp RAW có tồn tại không
+    if (do shell script "test -e " & rawFileQuoted & " && echo exists") is "exists" then
         tell application "Finder"
             duplicate file rawFile to destinationFolder
         end tell
         display dialog "Đã sao chép tệp RAW: " & baseName
     end if
 
-    if exists file jpegFile then
+    -- Kiểm tra xem tệp JPEG có tồn tại không
+    if (do shell script "test -e " & jpegFileQuoted & " && echo exists") is "exists" then
         tell application "Finder"
             duplicate file jpegFile to destinationFolder
         end tell
@@ -50,12 +55,14 @@ repeat with destFile in destFiles
     repeat with ext in fileExtensions
         -- Tạo tên file cho mỗi định dạng
         set fileInDest to destinationFolder & ":" & baseNameDest & ext as string
+        set fileInDestQuoted to quoted form of fileInDest
 
         -- Kiểm tra xem tệp có thiếu trong thư mục đích không
-        if (not (exists file fileInDest)) then
+        if (do shell script "test -e " & fileInDestQuoted & " && echo exists") is not "exists" then
             -- Nếu thiếu, sao chép tệp từ thư mục DISC vào thư mục đích
             set fileInSource to sourceFolder & ":" & baseNameDest & ext as string
-            if (exists file fileInSource) then
+            set fileInSourceQuoted to quoted form of fileInSource
+            if (do shell script "test -e " & fileInSourceQuoted & " && echo exists") is "exists" then
                 tell application "Finder"
                     duplicate file fileInSource to destinationFolder
                 end tell
