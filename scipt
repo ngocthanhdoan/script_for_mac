@@ -6,7 +6,57 @@ set destinationFolder to choose folder with prompt "Chọn thư mục đích đ�
 
 -- Chuyển đổi đường dẫn từ AppleScript format sang POSIX format
 set sourceFolderPosix to POSIX path of sourceFolder
+set destinationFolderPosix to POSIX path of destinationFol-- Chọn thư mục DISC (thư mục gốc chứa ảnh RAW và JPEG)
+set sourceFolder to choose folder with prompt "Chọn thư mục DISC chứa ảnh RAW và JPEG"
+
+-- Chọn thư mục đích để lưu các tệp đã chọn
+set destinationFolder to choose folder with prompt "Chọn thư mục đích để lưu các tệp đã chọn"
+
+-- Chuyển đổi đường dẫn từ AppleScript format sang POSIX format
+set sourceFolderPosix to POSIX path of sourceFolder
 set destinationFolderPosix to POSIX path of destinationFolder
+
+-- Lấy tất cả các tệp trong thư mục đích
+tell application "Finder"
+    set destFiles to files of destinationFolder
+end tell
+
+-- Bắt đầu xử lý sao chép các tệp có cùng tên nhưng khác định dạng từ DISC sang thư mục đích
+repeat with destFile in destFiles
+    set destFileName to name of destFile
+    set baseName to do shell script "basename " & quoted form of destFileName & " | cut -d. -f1" -- Lấy tên file không có đuôi
+
+    -- Lấy danh sách tất cả các tệp có cùng tên nhưng khác định dạng trong thư mục gốc
+    set sourceFiles to do shell script "find " & quoted form of sourceFolderPosix & " -type f -name " & quoted form of (baseName & ".*")
+
+    -- Chia danh sách tệp thành các dòng riêng biệt
+    set sourceFilesList to paragraphs of sourceFiles
+
+    -- Duyệt qua tất cả các tệp trong danh sách
+    repeat with sourceFile in sourceFilesList
+        set fileInSource to sourceFile
+        set fileInDest to destinationFolderPosix & baseName & "." & (do shell script "basename " & quoted form of sourceFile & " | cut -d. -f2")
+
+        -- Kiểm tra xem tệp có tồn tại trong thư mục đích không
+        if (do shell script "test -e " & quoted form of fileInDest & " && echo exists") is not "exists" then
+            -- Nếu tệp không tồn tại trong thư mục đích, sao chép tệp từ thư mục DISC vào thư mục đích
+            if (do shell script "test -e " & quoted form of fileInSource & " && echo exists") is "exists" then
+                try
+                    -- Sao chép tệp vào thư mục đích
+                    do shell script "cp " & quoted form of fileInSource & " " & quoted form of destinationFolderPosix
+                    display dialog "Đã sao chép tệp: " & baseName & "." & (do shell script "basename " & quoted form of sourceFile & " | cut -d. -f2") buttons {"OK"} default button "OK"
+                on error errMsg
+                    display dialog "Không thể sao chép tệp: " & baseName & "." & (do shell script "basename " & quoted form of sourceFile & " | cut -d. -f2") & ". Lỗi: " & errMsg buttons {"OK"} default button "OK"
+                end try
+            else
+                display dialog "Tệp không tồn tại trong thư mục gốc: " & baseName & "." & (do shell script "basename " & quoted form of sourceFile & " | cut -d. -f2") buttons {"OK"} default button "OK"
+            end if
+        end if
+    end repeat
+end repeat
+
+display dialog "Hoàn tất sao chép các tệp thiếu!" buttons {"OK"} default button "OK"
+der
 
 -- Lấy tất cả các tệp trong thư mục đích
 tell application "Finder"
